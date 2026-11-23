@@ -1172,11 +1172,7 @@ fun generateSummaryJson(
     val suspiciousCount = report3Rows.count { it.riskFlagLevel == "Suspicious" }
     val totalSepDecWithdrawalCount = report4Rows.sumOf { it.withdrawalCount }
     val totalSepDecWithdrawalAmount = report4Rows.sumOf { it.totalWithdrawalAmount }
-    val avgWithdrawalAmount = if (totalSepDecWithdrawalCount > 0) {
-        totalSepDecWithdrawalAmount / totalSepDecWithdrawalCount
-    } else {
-        0.00
-    }
+    val avgWithdrawalAmount = totalSepDecWithdrawalAmount / totalSepDecWithdrawalCount
 
     val jsonContent = String.format(
         Locale.US,
