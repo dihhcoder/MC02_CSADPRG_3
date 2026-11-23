@@ -215,58 +215,58 @@ fun loadDataset(fileName: String = CSV_FILE_NAME): List<Transaction> {
 
     val cleanedTransactions = mutableListOf<Transaction>()
     var totalRows = 0
+    var errorRows = 0
+    val dateFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy")
+    val timeFormatter = DateTimeFormatter.ofPattern("HH:mm:ss")
+    val nameRegex = Regex("[a-zA-Z.\\-'\\s]+")
 
     file.useLines { lines ->
         for (line in lines.drop(1)) {
-            if (line.isBlank()) continue
             totalRows++
-
             val parts = line.split(",")
 
-            // Skip incomplete rows or missing values
-            if (parts.size < 8 || parts.take(8).any { it.trim().isEmpty() }) {
+            if (parts.size != 8 || !parts[0].trim().contains(" ") || !parts[0].trim().matches(nameRegex)) {
+                errorRows++
                 continue
             }
 
-            val accountName = parts[0].trim().replace("\\s+".toRegex(), " ")
-            val accountNumber = parts[1].trim()
-            val currency = parts[4].trim().uppercase()
+            try {
+                val currency = parts[4].trim().uppercase()
+                if (currency != "PHP") continue
 
-            // Filter for PHP currency only
-            if (currency != "PHP") continue
+                val accountName = parts[0].trim()
+                val accountNumber = parts[1].trim()
+                val parsedDate = LocalDate.parse(parts[2].trim(), dateFormatter)
+                val parsedTime = LocalTime.parse(parts[3].trim(), timeFormatter)
+                val amount = parts[5].trim().toDouble()
+                val type = parts[6].trim().lowercase()
+                val currentBalance = parts[7].trim().toDouble()
 
-            // Parse date/time and convert financial fields to Double
-            val parsedDate = parseDateUniformly(parts[2].trim())
-            val parsedTime = parseTimeUniformly(parts[3].trim())
-            val amount = parts[5].trim().toDoubleOrNull()
-            val type = parts[6].trim().lowercase()
-            val currentBalance = parts[7].trim().toDoubleOrNull()
-
-            if (parsedDate == null || parsedTime == null || amount == null || currentBalance == null) {
-                continue
-            }
-
-            cleanedTransactions.add(
-                Transaction(
-                    accountName = accountName,
-                    accountNumber = accountNumber,
-                    date = parsedDate,
-                    time = parsedTime,
-                    currency = currency,
-                    amount = amount,
-                    type = type,
-                    currentBalance = currentBalance
+                cleanedTransactions.add(
+                    Transaction(
+                        accountName = accountName,
+                        accountNumber = accountNumber,
+                        date = parsedDate,
+                        time = parsedTime,
+                        currency = currency,
+                        amount = amount,
+                        type = type,
+                        currentBalance = currentBalance
+                    )
                 )
-            )
+            } catch (_: Exception) {
+                errorRows++
+            }
         }
     }
 
     println(
         String.format(
             Locale.US,
-            "Processing dataset... (%,d rows loaded, %,d filtered for PHP currency)\n",
+            "Processing dataset...\n%,d row/s loaded\n%,d filtered rows for PHP currency\n%,d filtered rows with errors\n",
             totalRows,
-            cleanedTransactions.size
+            cleanedTransactions.size,
+            errorRows
         )
     )
 
@@ -706,7 +706,7 @@ fun interest(name: String, balance: Double, currency: String, interest: Double, 
 }
 
 // Report 1: Banking Privilege Tiers
-fun genrep1(transactions: List<Transaction>) {
+fun genrep1(transactions: List<Transaction>): List<PrivilegeTierReportRow> {
     val outputFileName = "report1_banking_privilege_tiers.csv"
     val csvHeader = "AccountName,AccountAge,CurrentBalance,AverageDailyBalance,PrivilegeTier"
 
@@ -715,7 +715,7 @@ fun genrep1(transactions: List<Transaction>) {
         println("No transactions available to generate report.\n")
         File(outputFileName).writeText("$csvHeader\n")
         println("Full table exported to: $outputFileName\n")
-        return
+        return emptyList()
     }
 
     // Determine reference date and the last completed month (previous calendar month)
@@ -836,10 +836,11 @@ fun genrep1(transactions: List<Transaction>) {
         }
     }
     println("Full table exported to: $outputFileName\n")
+    return reportRows
 }
 
 // Report 2: Interest Expense Projection
-fun genrep2(transactions: List<Transaction>) {
+fun genrep2(transactions: List<Transaction>): List<InterestProjectionReportRow> {
     val outputFileName = "report2_interest_expense_projection.csv"
     val csvHeader = "AccountName,CurrentBalance,ExpectedInterest"
     val annualInterestRate = 0.05
@@ -851,46 +852,27 @@ fun genrep2(transactions: List<Transaction>) {
         println("No transactions available to generate report.\n")
         File(outputFileName).writeText("$csvHeader\n")
         println("Full table exported to: $outputFileName\n")
-        return
+        return emptyList()
     }
 
-    val transactionsByAccount = transactions.groupBy { it.accountNumber }
-    val reportRows = mutableListOf<InterestProjectionReportRow>()
+    val latestTxComparator = compareBy<Transaction> { it.date }.thenBy { it.time }
 
-    for ((_, accountTxs) in transactionsByAccount) {
-        val sortedTxs = accountTxs.sortedWith(compareBy<Transaction> { it.date }.thenBy { it.time })
-        val lastTx = sortedTxs.last()
+    val reportRows = transactions
+        .groupBy { it.accountNumber }
+        .values
+        .mapNotNull { accountTxs ->
+            val lastTx = accountTxs.maxWithOrNull(latestTxComparator) ?: return@mapNotNull null
+            if (lastTx.currentBalance < 10_000.00) return@mapNotNull null
 
-        val accountName = lastTx.accountName
-        val currentBalance = lastTx.currentBalance
+            val expectedInterest = lastTx.currentBalance * (annualInterestRate / daysInYear) * projectionDays
 
-        // Filter: CurrentBalance >= PHP 10,000.00
-        if (currentBalance < 10_000.00) {
-            continue
-        }
-
-        // Compute 30-day compounded interest using End-of-Day Balance * (0.05 / 365)
-        var runningBalance = currentBalance
-        var totalExpectedInterest = 0.00
-
-        for (day in 1..projectionDays) {
-            val rawDaily = runningBalance * (annualInterestRate / daysInYear)
-            val dailyInterest = ceil(rawDaily * 100.0) / 100.0
-            runningBalance += dailyInterest
-            totalExpectedInterest += dailyInterest
-        }
-
-        reportRows.add(
             InterestProjectionReportRow(
-                accountName = accountName,
-                currentBalance = currentBalance,
-                expectedInterest = totalExpectedInterest
+                accountName = lastTx.accountName,
+                currentBalance = lastTx.currentBalance,
+                expectedInterest = expectedInterest
             )
-        )
-    }
-
-    // Sort descending by ExpectedInterest
-    reportRows.sortByDescending { it.expectedInterest }
+        }
+        .sortedByDescending { it.currentBalance }
 
     // Write full sorted table to CSV
     val csvContent = buildString {
@@ -933,10 +915,11 @@ fun genrep2(transactions: List<Transaction>) {
         }
     }
     println("Full table exported to: $outputFileName\n")
+    return reportRows
 }
 
 // Report 3: Suspicious Client Behavior
-fun genrep3(transactions: List<Transaction>) {
+fun genrep3(transactions: List<Transaction>): List<SuspiciousBehaviorReportRow> {
     val outputFileName = "report3_suspicious_client_behavior.csv"
     val csvHeader = "AccountName,Date,TotalWithdrawalAmounts,NumberOfDeposits,TotalDepositAmounts,TurnoverVelocity,RiskFlagLevel"
     val dateFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy")
@@ -946,7 +929,7 @@ fun genrep3(transactions: List<Transaction>) {
         println("No transactions available to generate report.\n")
         File(outputFileName).writeText("$csvHeader\n")
         println("Full table exported to: $outputFileName\n")
-        return
+        return emptyList()
     }
 
     // Group transactions by accountNumber and date
@@ -1046,10 +1029,11 @@ fun genrep3(transactions: List<Transaction>) {
         )
     }
     println("Full table exported to: $outputFileName\n")
+    return reportRows
 }
 
 // Report 4: Highest Withdrawals (September to December)
-fun genrep4(transactions: List<Transaction>) {
+fun genrep4(transactions: List<Transaction>): List<HighestWithdrawalReportRow> {
     val outputFileName = "report4_highest_withdrawals.csv"
     val csvHeader = "AccountName,AccountNumber,WithdrawalCount,TotalWithdrawalAmount,HighestSingleWithdrawal,HighestWithdrawalDate"
     val dateFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy")
@@ -1060,7 +1044,7 @@ fun genrep4(transactions: List<Transaction>) {
         println("No transactions available to generate report.\n")
         File(outputFileName).writeText("$csvHeader\n")
         println("Full table exported to: $outputFileName\n")
-        return
+        return emptyList()
     }
 
     // Filter for withdrawal transactions from September (9) to December (12)
@@ -1145,6 +1129,56 @@ fun genrep4(transactions: List<Transaction>) {
         }
     }
     println("Full table exported to: $outputFileName\n")
+    return reportRows
+}
+
+// Helper to safely escape strings for JSON output
+fun escapeJson(value: String): String {
+    return value
+        .replace("\\", "\\\\")
+        .replace("\"", "\\\"")
+        .replace("\n", "\\n")
+        .replace("\r", "\\r")
+        .replace("\t", "\\t")
+}
+
+// Generate summary.json aggregating key statistics across the dataset and all 4 reports
+fun generateSummaryJson(
+    transactions: List<Transaction>,
+    report2Rows: List<InterestProjectionReportRow>
+) {
+    val outputFileName = "summary.json"
+    val transactionsByAccount = transactions.groupBy { it.accountNumber }
+
+    val totalAccounts = transactionsByAccount.size
+    val totalDeposits = transactions
+        .filter { it.type == "deposit" }
+        .sumOf { it.amount }
+    val totalWithdrawals = transactions
+        .filter { it.type == "withdrawal" }
+        .sumOf { it.amount }
+    val totalBalance = transactionsByAccount.values.sumOf { accountTxs ->
+        accountTxs.sortedWith(compareBy<Transaction> { it.date }.thenBy { it.time })
+            .last()
+            .currentBalance
+    }
+    val totalInterestExpense = report2Rows.sumOf { it.expectedInterest }
+
+    val jsonContent = String.format(
+        Locale.US,
+        "{total_accounts: %,d, total_deposits: %,.2f, total_withdrawals: %,.2f, total_balance: %,.2f, total_interest_expense: %,.2f}",
+        totalAccounts,
+        totalDeposits,
+        totalWithdrawals,
+        totalBalance,
+        totalInterestExpense
+    )
+
+    File(outputFileName).writeText("$jsonContent\n")
+
+    println("Summary State ($outputFileName):")
+    println(jsonContent)
+    println()
 }
 
 // Option 7
@@ -1169,13 +1203,16 @@ fun report() {
             2 -> {
                 println("Generating reports...")
                 println("Outputs saved to individual files...\n")
-                genrep1(loadedTransactions)
+                val r1 = genrep1(loadedTransactions)
                 print("\n")
-                genrep2(loadedTransactions)
+                val r2 = genrep2(loadedTransactions)
                 print("\n")
-                genrep3(loadedTransactions)
+                val r3 = genrep3(loadedTransactions)
                 print("\n")
-                genrep4(loadedTransactions)
+                val r4 = genrep4(loadedTransactions)
+                print("\n")
+                generateSummaryJson(loadedTransactions, r2)
+
             }
             
             3 -> loop = false
