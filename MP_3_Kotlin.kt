@@ -1145,7 +1145,10 @@ fun escapeJson(value: String): String {
 // Generate summary.json aggregating key statistics across the dataset and all 4 reports
 fun generateSummaryJson(
     transactions: List<Transaction>,
-    report2Rows: List<InterestProjectionReportRow>
+    report1Rows: List<PrivilegeTierReportRow>,
+    report2Rows: List<InterestProjectionReportRow>,
+    report3Rows: List<SuspiciousBehaviorReportRow>,
+    report4Rows: List<HighestWithdrawalReportRow>
 ) {
     val outputFileName = "summary.json"
     val transactionsByAccount = transactions.groupBy { it.accountNumber }
@@ -1162,16 +1165,32 @@ fun generateSummaryJson(
             .last()
             .currentBalance
     }
+    val silverCount = report1Rows.count { it.privilegeTier == "Silver" }
+    val goldCount = report1Rows.count { it.privilegeTier == "Gold" }
+    val platinumCount = report1Rows.count { it.privilegeTier == "Platinum" }
     val totalInterestExpense = report2Rows.sumOf { it.expectedInterest }
+    val suspiciousCount = report3Rows.count { it.riskFlagLevel == "Suspicious" }
+    val totalSepDecWithdrawalCount = report4Rows.sumOf { it.withdrawalCount }
+    val totalSepDecWithdrawalAmount = report4Rows.sumOf { it.totalWithdrawalAmount }
+    val avgWithdrawalAmount = if (totalSepDecWithdrawalCount > 0) {
+        totalSepDecWithdrawalAmount / totalSepDecWithdrawalCount
+    } else {
+        0.00
+    }
 
     val jsonContent = String.format(
         Locale.US,
-        "{total_accounts: %,d, total_deposits: %,.2f, total_withdrawals: %,.2f, total_balance: %,.2f, total_interest_expense: %,.2f}",
+        "{total_accounts: %,d, total_deposits: %,.2f, total_withdrawals: %,.2f, total_balance: %,.2f, total_interest_expense: %,.2f, silver: %,d, gold: %,d, platinum: %,d, suspicious_rows: %,d, average_withdrawal_amount_sept_to_dec: %,.2f}",
         totalAccounts,
         totalDeposits,
         totalWithdrawals,
         totalBalance,
-        totalInterestExpense
+        totalInterestExpense,
+        silverCount,
+        goldCount,
+        platinumCount,
+        suspiciousCount,
+        avgWithdrawalAmount
     )
 
     File(outputFileName).writeText("$jsonContent\n")
@@ -1211,7 +1230,7 @@ fun report() {
                 print("\n")
                 val r4 = genrep4(loadedTransactions)
                 print("\n")
-                generateSummaryJson(loadedTransactions, r2)
+                generateSummaryJson(loadedTransactions, r1, r2, r3, r4)
 
             }
             
