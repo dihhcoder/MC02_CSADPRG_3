@@ -463,17 +463,15 @@ write_report <- function(df, file_name, title) {
   cat(sprintf("(Full table exported to %s)\n", file_name))
 }
 
-report_month <- function(txns) {
-  reference <- max(txns$date)
-  current_month <- as.Date(format(reference, "%Y-%m-01"))
-  previous_month <- seq(current_month, by = "-1 month", length.out = 2)[2]
-  start <- if (any(txns$date >= previous_month & txns$date < current_month)) previous_month else current_month
-  end <- seq(start, by = "1 month", length.out = 2)[2] - 1
+report_month <- function() {
+  current_month <- as.Date(format(Sys.Date(), "%Y-%m-01"))
+  start <- seq(current_month, by = "-1 month", length.out = 2)[2]
+  end <- current_month - 1
   list(start = start, end = end, days = as.integer(end - start) + 1)
 }
 
 report1_privilege_tiers <- function(txns, accounts) {
-  month <- report_month(txns)
+  month <- report_month()
   day_numbers <- as.numeric(seq(month$start, month$end, by = "day"))
 
   eod_sums <- vapply(split(txns, txns$number), function(t) {
@@ -485,8 +483,9 @@ report1_privilege_tiers <- function(txns, accounts) {
   qualified <- eod_sums >= ADB_MINIMUM * 100 * month$days
   rows <- accounts[qualified, ]
   sums <- eod_sums[qualified]
-  adb <- floor(sums / month$days + 0.5) / 100
-  tier <- ifelse(adb < SILVER_LIMIT, "Silver", ifelse(adb < GOLD_LIMIT, "Gold", "Platinum"))
+  adb <- ((2 * sums + month$days) %/% (2 * month$days)) / 100
+  tier <- ifelse(sums < SILVER_LIMIT * 100 * month$days, "Silver",
+                 ifelse(sums < GOLD_LIMIT * 100 * month$days, "Gold", "Platinum"))
   ord <- order(-sums, rows$name)
 
   df <- data.frame(
@@ -531,7 +530,7 @@ report3_suspicious_behavior <- function(txns, accounts) {
   )
   daily$name <- accounts$name[match(daily$number, accounts$number)]
   velocity <- ifelse(daily$deposits > 0,
-                     floor(daily$withdrawals / daily$deposits * 10000 + 0.5) / 100, NA)
+                     ((daily$withdrawals * 20000 + daily$deposits) %/% (2 * daily$deposits)) / 100, NA)
   suspicious <- daily$withdrawals >= SUSPICIOUS_WITHDRAWAL * 100 |
     (daily$deposits > 0 & daily$withdrawals * 100 >= SUSPICIOUS_VELOCITY * daily$deposits)
   ord <- order(daily$date, !suspicious, daily$name)
