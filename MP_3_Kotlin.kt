@@ -741,7 +741,7 @@ fun genrep1(transactions: List<Transaction>): List<PrivilegeTierReportRow> {
         val lastTx = sortedTxs.last()
 
         val accountName = lastTx.accountName
-        val accountAge = ChronoUnit.DAYS.between(firstTx.date, latestDate)
+        val accountAge = ChronoUnit.DAYS.between(firstTx.date, LocalDate.now())
         val currentBalance = lastTx.currentBalance
 
         // Starting balance before the target month begins (0.0 if opened during targetMonth)
