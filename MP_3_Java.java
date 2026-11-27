@@ -1146,15 +1146,17 @@ public class MP_3_Java {
             this.totalDeposits += toAdd;
         }
 
-        public double getTurnoverVelocity() {
+        public Double getTurnoverVelocity() {
             if (totalDeposits == 0.0) {
-                return (totalWithdrawals > 0.0) ? 100.0 : 0.0;
+                return null;
             }
             return (totalWithdrawals / totalDeposits) * 100.0;
         }
 
         public String getRiskFlagLevel() {
-            if (totalWithdrawals >= 500000.00 || getTurnoverVelocity() >= 90.0) {
+            Double velocity = getTurnoverVelocity();
+            boolean highVelocity = (velocity != null && velocity >= 90.0);
+            if (totalWithdrawals >= 500000.0 || highVelocity) {
                 return "Suspicious";
             }
             return "Normal";
