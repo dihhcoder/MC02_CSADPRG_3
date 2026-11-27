@@ -919,7 +919,7 @@ fun genrep2(transactions: List<Transaction>): List<InterestProjectionReportRow> 
 }
 
 // Helper for N/A
-private fun formatVelocity(totalDeposits: Double, turnoverVelocity: Double): String {
+private fun formatVelocityOutput(totalDeposits: Double, turnoverVelocity: Double): String {
     return if (totalDeposits <= 0.0) {
         "N/A"
     } else {
