@@ -918,6 +918,15 @@ fun genrep2(transactions: List<Transaction>): List<InterestProjectionReportRow> 
     return reportRows
 }
 
+// Helper for N/A
+private fun formatVelocity(totalDeposits: Double, turnoverVelocity: Double): String {
+    return if (totalDeposits <= 0.0) {
+        "N/A"
+    } else {
+        String.format(Locale.US, "%.2f", turnoverVelocity)
+    }
+}
+
 // Report 3: Suspicious Client Behavior
 fun genrep3(transactions: List<Transaction>): List<SuspiciousBehaviorReportRow> {
     val outputFileName = "report3_suspicious_client_behavior.csv"
@@ -988,16 +997,17 @@ fun genrep3(transactions: List<Transaction>): List<SuspiciousBehaviorReportRow> 
     val csvContent = buildString {
         appendLine(csvHeader)
         for (row in reportRows) {
+            val velocityDisplay = formatVelocityOutput(row.totalDepositAmounts, row.turnoverVelocity)
             appendLine(
                 String.format(
                     Locale.US,
-                    "%s,%s,%.2f,%d,%.2f,%.2f,%s",
+                    "%s,%s,%.2f,%d,%.2f,%s,%s",
                     row.accountName,
                     row.date.format(dateFormatter),
                     row.totalWithdrawalAmounts,
                     row.numberOfDeposits,
                     row.totalDepositAmounts,
-                    row.turnoverVelocity,
+                    velocityDisplay,
                     row.riskFlagLevel
                 )
             )
@@ -1014,16 +1024,17 @@ fun genrep3(transactions: List<Transaction>): List<SuspiciousBehaviorReportRow> 
         )
     )
     for (row in reportRows.take(2)) {
+        val velocityDisplay = formatVelocityOutput(row.totalDepositAmounts, row.turnoverVelocity)
         println(
             String.format(
                 Locale.US,
-                "%-20s | %-10s | %,-17.2f | %-10d | %,-15.2f | %,-12.2f | %-10s",
+                "%-20s | %-10s | %,-17.2f | %-10d | %,-15.2f | %-12s | %-10s",
                 row.accountName,
                 row.date.format(dateFormatter),
                 row.totalWithdrawalAmounts,
                 row.numberOfDeposits,
                 row.totalDepositAmounts,
-                row.turnoverVelocity,
+                velocityDisplay,
                 row.riskFlagLevel
             )
         )
