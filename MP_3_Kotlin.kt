@@ -23,6 +23,7 @@ import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.math.ceil
+import kotlin.math.pow
 
 const val CSV_FILE_NAME = "bank_transactions.csv"
 const val CSV_HEADER = "account_name,account_number,date,time,currency,amount,type,current_balance"
@@ -856,6 +857,7 @@ fun genrep2(transactions: List<Transaction>): List<InterestProjectionReportRow> 
     }
 
     val latestTxComparator = compareBy<Transaction> { it.date }.thenBy { it.time }
+    val dailyRate = annualInterestRate / daysInYear
 
     val reportRows = transactions
         .groupBy { it.accountNumber }
@@ -864,7 +866,7 @@ fun genrep2(transactions: List<Transaction>): List<InterestProjectionReportRow> 
             val lastTx = accountTxs.maxWithOrNull(latestTxComparator) ?: return@mapNotNull null
             if (lastTx.currentBalance < 10_000.00) return@mapNotNull null
 
-            val expectedInterest = lastTx.currentBalance * (annualInterestRate / daysInYear) * projectionDays
+            val expectedInterest = lastTx.currentBalance * ((1.0 + dailyRate).pow(projectionDays) - 1.0)
 
             InterestProjectionReportRow(
                 accountName = lastTx.accountName,
