@@ -953,7 +953,7 @@ fun genrep3(transactions: List<Transaction>): List<SuspiciousBehaviorReportRow> 
             }
         }
 
-        val turnoverVelocity = if (totalDepositAmounts >= 100.00) {
+        val turnoverVelocity = if (totalDepositAmounts > 0.00) {
             (totalWithdrawalAmounts / totalDepositAmounts) * 100.0
         } else {
             0.00
