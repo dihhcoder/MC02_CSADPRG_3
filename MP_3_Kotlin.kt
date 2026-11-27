@@ -184,7 +184,7 @@ fun saveTransactionToCsv(
     ensureCsvFileExists()
     val now = LocalDateTime.now()
     val dateFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy")
-    val timeFormatter = DateTimeFormatter.ofPattern("HH:mm:ss")
+    val timeFormatter = DateTimeFormatter.ofPattern("H:mm:ss")
 
     val currentDate = now.format(dateFormatter)
     val currentTime = now.format(timeFormatter)
@@ -217,7 +217,7 @@ fun loadDataset(fileName: String = CSV_FILE_NAME): List<Transaction> {
     var totalRows = 0
     var errorRows = 0
     val dateFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy")
-    val timeFormatter = DateTimeFormatter.ofPattern("HH:mm:ss")
+    val timeFormatter = DateTimeFormatter.ofPattern("H:mm:ss")
     val nameRegex = Regex("[a-zA-Z.\\-'\\s]+")
 
     file.useLines { lines ->
@@ -1048,7 +1048,7 @@ fun genrep4(transactions: List<Transaction>): List<HighestWithdrawalReportRow> {
     val outputFileName = "report4_highest_withdrawals.csv"
     val csvHeader = "AccountName,AccountNumber,WithdrawalCount,TotalWithdrawalAmount,HighestSingleWithdrawal,HighestWithdrawalDate"
     val dateFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy")
-    val timeFormatter = DateTimeFormatter.ofPattern("HH:mm:ss")
+    val timeFormatter = DateTimeFormatter.ofPattern("H:mm:ss")
 
     if (transactions.isEmpty()) {
         println("Report 4: Highest Withdrawals (September to December)")
